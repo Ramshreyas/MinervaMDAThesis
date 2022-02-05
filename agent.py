@@ -34,8 +34,7 @@ class agent:
         
     def updateFcast(self,forecast,price,tau):
         # weighted forecast value
-        self.fcast = self.fcastAdjust*(self.fundWeight*forecast.fundamental+self.chartWeight*forecast.chartist[self.l] + \
-            self.noiseWeight*forecast.noise)
+        self.fcast = self.fcastAdjust*(self.fundWeight*forecast.fundamental+self.chartWeight*forecast.chartist[self.l] + self.noiseWeight*forecast.noise)
         # bound the forecast
         self.fcast = min(self.fcast,0.5)
         self.fcast = max(self.fcast,-0.5)
