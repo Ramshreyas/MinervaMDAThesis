@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(somebm)
 library(scatterplot3d)
 library(ggfortify)
+library(orderbook)
 ```
 
 ## Spot market price signal
@@ -116,11 +117,11 @@ getPositionalOrder <- function(forecast, price, trader, kMax) {
   if (forecast > price) {
     print("BUY")
     # Return Buy order
-    return(list(trader, forecast*(1-kMax)))
+    return(list(trader, forecast*(1-kMax), 1))
   } else {
     print("SELL")
     # Return Sell order
-    return(list(trader, -1*forecast*(1+kMax)))
+    return(list(trader, -1*forecast*(1+kMax), 1))
   }
 }
 ```
@@ -131,11 +132,11 @@ getFundingOrder <- function(forecast, price, premium, trader, kMax) {
   if (forecast > premium) {
     print("BUY")
     # Return Buy order
-    return(list(trader, price*(1-kMax)))
+    return(list(trader, price*(1-kMax), 1))
   } else {
     print("SELL")
     # Return Sell order
-    return(list(trader, -1*price*(1+kMax)))
+    return(list(trader, -1*price*(1+kMax), 1))
   }
 }
 ```
@@ -179,7 +180,7 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
   if (runif(1) < close_position_probability) {
     setAgentParameter(trader, "Side", -1)
     print("Closing position")
-    return(list(trader, 0))
+    return(list(trader, 0, 0))
   }
   
   # Generate price forecast
@@ -229,6 +230,66 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
   }
 }
 ```
+
+addOrder(orderbook, order, time, type) 
+
+```{r message=FALSE, warning=FALSE}
+addOrder <- function(ob, order, t) {
+  price <- order[[2]]
+  size <- order[[3]]
+  
+  # Buy
+  if(price > 0) {
+    
+    # Get best ask
+    best_ask <- best.ask(ob)["price"] 
+    
+    # If price less than current best ask
+    if (is.na(best_ask) || price < best_ask) {
+      
+      # Set limit order
+      ob <- add.order(ob, price, size, type = "BID", time = t)
+      return(ob)
+      
+    } else {
+      
+      # Else add market order
+      ob <- market.order(ob, size, "BUY")
+      return(ob)
+      
+    }
+  # Sell
+  } else if(price < 0) {
+    
+    # Remove negative sign for sell
+    price <- abs(price)
+    
+    # Get best bid
+    best_bid <- best.bid(ob)["price"] 
+    
+    # If price greater than current best bid
+    if (is.na(best_bid) || price > best.bid(ob)["price"]) {
+      
+      # Set limit order
+      ob <- add.order(ob, price, size, type = "ASK", time = t)
+      return(ob)
+      
+    } else {
+      
+      # Else add market order
+      ob <- market.order(ob, size, "SELL")
+      return(ob)
+      
+    }
+  # Exit market
+  } else {
+    
+    return(ob)
+    
+  }
+}
+```
+
 ## Test forecast and order generation
 
 ```{r message=FALSE, warning=FALSE}
@@ -244,16 +305,48 @@ close_position_probability <- 0.2
 
 sigmaE <- 0.5
 
-order_book <- c()
-
 t <- 250
 
-order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)[2]
+order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+
+ob <- orderbook("orderbook.txt")
+
+best.ask(ob)["price"]
 
 print("Perp price at t: ")
 perp_prices[t]
 print("Order at t: ")
 order
+ob <- addOrder(ob, order, t)
+show(ob)
+
+# for (t in 250:1000) {
+#   # Select random trader
+#   trader <- traders[runif(nAgents, 1), ]
+#   
+#   # Get order
+#   order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+#   price <- order[[2]]
+#   size <- order[[3]]
+#   
+#   # Check if size is zero
+#   if(size) {
+#     # Do nothing
+#     
+#   } else {
+#     # Add to book as market or limit
+#     ob <- addOrder(ob, order, t)
+#   
+#     # Check if trade occurs
+#   
+#     # Update perp price
+#   
+#     # Update premia
+#   
+#     # Clean old trades
+# 
+#   }
+# }
 ```
 
 
