@@ -34,7 +34,7 @@ setAgentParameter(agent, param, value)
 ```{r message=FALSE, warning=FALSE}
 # Helper function to create agents as simple vectors of their parameters:
 # Fundamentalist Chartist and Noise Weights, Horizon for momentum rules, Randomized Spread size
-createAgent <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
+createAgentVector <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
   c(sigmaF * runif(1),
     sigmaC * runif(1, -1, 1),
     sigmaN * runif(1, -1, 1),
@@ -45,15 +45,16 @@ createAgent <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
 
 # Helper to get Agent parameters
 getAgentParameter <- function(agent, param) {
-  switch (
-    param,
-    "Fundamentalist" = agent[1],
-    "Chartist" = agent[2],
-    "Noise" = agent[3],
-    "Horizon" = agent[4],
-    "Spread" = agent[5],
-    "Side" = agent[6]
-  )
+  # switch (
+  #   param,
+  #   "Fundamentalist" = agent[1],
+  #   "Chartist" = agent[2],
+  #   "Noise" = agent[3],
+  #   "Horizon" = agent[4],
+  #   "Spread" = agent[5],
+  #   "Side" = agent[6]
+  # )
+  agent[, param]
 }
 
 # Helper to set Agent parameters
@@ -100,7 +101,7 @@ names(traders) <- c("Fundamentalist", "Chartist", "Noise", "Horizon", "Spread", 
 
 # Create traders
 for (i in 1:nAgents) {
-  traders[i,] <- createAgent(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax)
+  traders[i,] <- createAgentVector(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax)
 }
 
 with(data = traders,
@@ -179,7 +180,7 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
   # Randomly close positions for some traders and exit (allowing for trader distribution to be dynamic over time)
   if (runif(1) < close_position_probability) {
     setAgentParameter(trader, "Side", -1)
-    print("Closing position")
+    print("Exiting")
     return(list(trader, 0, 0))
   }
   
@@ -249,13 +250,13 @@ addOrder <- function(ob, order, t) {
       
       # Set limit order
       ob <- add.order(ob, price, size, type = "BID", time = t)
-      return(ob)
+      return(list(ob, NULL))
       
     } else {
       
       # Else add market order
       ob <- market.order(ob, size, "BUY")
-      return(ob)
+      return(list(ob, best_ask))
       
     }
   # Sell
@@ -272,19 +273,19 @@ addOrder <- function(ob, order, t) {
       
       # Set limit order
       ob <- add.order(ob, price, size, type = "ASK", time = t)
-      return(ob)
+      return(list(ob, NULL))
       
     } else {
       
       # Else add market order
       ob <- market.order(ob, size, "SELL")
-      return(ob)
+      return(list(ob, best_bid))
       
     }
   # Exit market
   } else {
     
-    return(ob)
+    return(list(ob, NULL))
     
   }
 }
@@ -293,11 +294,11 @@ addOrder <- function(ob, order, t) {
 ## Test forecast and order generation
 
 ```{r message=FALSE, warning=FALSE}
-perp_prices <- window(spot_price, start = 0, end = 0.250)
+perp_prices <- window(spot_price, start = 0, end = 1000)
 
-premia <- perp_prices - spot_price + runif(250, 0, 1)
+premia <- perp_prices - spot_price + runif(1000, 0, 1)
 
-trader <- createAgent(1, 1, 1, 0.25, 0, 0.005)
+trader <- createAgentVector(1, 1, 1, 0.25, 0, 0.005)
 
 bias <- 0.2
 
@@ -307,46 +308,62 @@ sigmaE <- 0.5
 
 t <- 250
 
-order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+nSims <- 251
+
+# order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+order1 <- list(trader, -100, 1)
 
 ob <- orderbook("orderbook.txt")
 
-best.ask(ob)["price"]
+#for (t in 250:nSims) {
+  # Select random trader
+  trader <- traders[sample(1:nAgents, 1), ]
 
-print("Perp price at t: ")
-perp_prices[t]
-print("Order at t: ")
-order
-ob <- addOrder(ob, order, t)
-show(ob)
+  # Get order
+  order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+  price <- order[[2]]
+  size <- order[[3]]
 
-# for (t in 250:1000) {
-#   # Select random trader
-#   trader <- traders[runif(nAgents, 1), ]
-#   
-#   # Get order
-#   order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
-#   price <- order[[2]]
-#   size <- order[[3]]
-#   
-#   # Check if size is zero
-#   if(size) {
-#     # Do nothing
-#     
-#   } else {
-#     # Add to book as market or limit
-#     ob <- addOrder(ob, order, t)
-#   
-#     # Check if trade occurs
-#   
-#     # Update perp price
-#   
-#     # Update premia
-#   
-#     # Clean old trades
-# 
-#   }
-# }
+  # Add to book as market or limit
+  result <- addOrder(ob, order, t)
+  ob <- result[[1]]
+  tradePrice <- result[[2]][["price"]]
+  
+  # Get best Ask and Bid, handle NA
+  best_ask <- best.ask(ob)["price"]
+  if(is.na(best_ask)) { best_ask <- 0 }
+  best_bid <- best.bid(ob)["price"]
+  if(is.na(best_bid)) { best_bid <- 0 }
+
+  # Check if trade occurs
+  if (is.null(tradePrice)) {
+    # Update perp price as midpoint between best ask and best bid
+    tradePrice <- (best_bid + best_ask)/2
+    perp_prices[t+1] <- tradePrice
+
+  } else {
+    # Update perp_price as trade price
+    perp_prices[t+1] <- tradePrice
+
+  }
+
+  # Update premia
+  premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
+
+  # Clean old trades
+#}
+  
+premia[t+1]
+  
+t <- t+1
+
+trader <- traders[sample(1:nAgents, 1), ]
+
+fundamental_forecast <- mean(premia)/premia[t]
+fundamental_forecast
+
+# forecast <- getForecast(trader, premia, sigmaE, t)
+# forecast
 ```
 
 
