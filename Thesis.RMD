@@ -206,11 +206,14 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
       
     } else {
       print("Long trader funding")
+      # Adjust premia by adding lowest negative value to make all data positive
+      adjusted_premia <- premia + min(premia)
+      
       # Generate funding forecast
-      forecast <- getForecast(trader, premia, sigmaE, t)
+      forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
       
       # Generate and return order
-      return(getFundingOrder(forecast, price_forecast, premia[t], trader, k))
+      return(getFundingOrder(forecast, price_forecast, adjusted_premia[t], trader, k))
     }
     
   # Else short trader
@@ -222,11 +225,14 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
       return(getPositionalOrder(price_forecast, perp_prices[t], trader, k))
     } else {
       print("Short trader funding")
+      # Adjust premia by adding lowest negative value to make all data positive
+      adjusted_premia <- premia + min(premia)
+      
       # Generate funding forecast
-      forecast <- getForecast(trader, premia, sigmaE, t)
+      forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
       
       # Generate and return order
-      return(getFundingOrder(forecast, price_forecast, premia[t], trader, k))
+      return(getFundingOrder(forecast, price_forecast, adjusted_premia[t], trader, k))
     }
   }
 }
@@ -308,14 +314,14 @@ sigmaE <- 0.5
 
 t <- 250
 
-nSims <- 251
+nSims <- 260
 
 # order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
 order1 <- list(trader, -100, 1)
 
 ob <- orderbook("orderbook.txt")
 
-#for (t in 250:nSims) {
+for (t in 250:nSims) {
   # Select random trader
   trader <- traders[sample(1:nAgents, 1), ]
 
@@ -330,9 +336,9 @@ ob <- orderbook("orderbook.txt")
   tradePrice <- result[[2]][["price"]]
   
   # Get best Ask and Bid, handle NA
-  best_ask <- best.ask(ob)["price"]
+  best_ask <- best.ask(ob)[["price"]]
   if(is.na(best_ask)) { best_ask <- 0 }
-  best_bid <- best.bid(ob)["price"]
+  best_bid <- best.bid(ob)[["price"]]
   if(is.na(best_bid)) { best_bid <- 0 }
 
   # Check if trade occurs
@@ -351,19 +357,11 @@ ob <- orderbook("orderbook.txt")
   premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
 
   # Clean old trades
-#}
-  
-premia[t+1]
-  
-t <- t+1
+}
 
-trader <- traders[sample(1:nAgents, 1), ]
-
-fundamental_forecast <- mean(premia)/premia[t]
-fundamental_forecast
-
-# forecast <- getForecast(trader, premia, sigmaE, t)
-# forecast
+spot_price[250:nSims]
+perp_prices[250:nSims]
+premia[250:nSims]
 ```
 
 

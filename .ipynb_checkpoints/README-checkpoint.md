@@ -1,1 +1,0 @@
-# Minerva MDA Thesis
