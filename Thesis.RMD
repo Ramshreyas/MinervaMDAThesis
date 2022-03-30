@@ -13,64 +13,20 @@ library(somebm)
 library(scatterplot3d)
 library(ggfortify)
 library(orderbook)
+
+source("agent.R", local = knitr::knit_global())
+source("forecast.R", local = knitr::knit_global())
+source("orderbook.R", local = knitr::knit_global())
 ```
 
 ## Spot market price signal
-spot_price <- gbm(x0=100, mu=0.1, sigma=0.1, t0=0, t=1, n=1000)
+
 ```{r message=FALSE, warning=FALSE}
 # Create GBM with the following values
-spot_price <- gbm(x0=100, mu=0.1, sigma=0.1, t0=0, t=1, n=1000)
+spot_price <- gbm(x0=100, mu=1, sigma=1, t0=0, t=1, n=1000)
 
 # Plot GBM
 autoplot(spot_price)
-```
-
-## Define Agent and helpers
-createAgent(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax)
-
-getAgentParameter(agent, param)
-
-setAgentParameter(agent, param, value)
-```{r message=FALSE, warning=FALSE}
-# Helper function to create agents as simple vectors of their parameters:
-# Fundamentalist Chartist and Noise Weights, Horizon for momentum rules, Randomized Spread size
-createAgentVector <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
-  c(sigmaF * runif(1),
-    sigmaC * runif(1, -1, 1),
-    sigmaN * runif(1, -1, 1),
-    runif(1, lMin, lMax),
-    kMax * runif(1),
-    -1)
-}
-
-# Helper to get Agent parameters
-getAgentParameter <- function(agent, param) {
-  # switch (
-  #   param,
-  #   "Fundamentalist" = agent[1],
-  #   "Chartist" = agent[2],
-  #   "Noise" = agent[3],
-  #   "Horizon" = agent[4],
-  #   "Spread" = agent[5],
-  #   "Side" = agent[6]
-  # )
-  agent[, param]
-}
-
-# Helper to set Agent parameters
-setAgentParameter <- function(agent, param, value) {
-  switch (
-    param,
-    "Fundamentalist" = { agent[1] <- value },
-    "Chartist" = { agent[2] <- value },
-    "Noise" = { agent[3] <- value },
-    "Horizon" = { agent[4] <- value },
-    "Spread" = { agent[5] <- value },
-    "Side" = { agent[6] <- value }
-  )
-  
-  agent
-}
 ```
 
 ## Create distribution of Traders
@@ -83,7 +39,7 @@ nAgents <- 100
 sigmaF <- 1
 
 # Chartist weight
-sigmaC <- 1
+sigmaC <- 10
 
 # Noise weight
 sigmaN <- 1
@@ -110,216 +66,29 @@ with(data = traders,
                    z = Noise))
 ```
 
-## Forecasts and Orders
-getPositionalOrder(forecast, prices, t, trader, kMax)
-```{r message=FALSE, warning=FALSE}
-# Helpers
-getPositionalOrder <- function(forecast, price, trader, kMax) {
-  if (forecast > price) {
-    print("BUY")
-    # Return Buy order
-    return(list(trader, forecast*(1-kMax), 1))
-  } else {
-    print("SELL")
-    # Return Sell order
-    return(list(trader, -1*forecast*(1+kMax), 1))
-  }
-}
-```
-
-getFundingOrder(forecast, price, premium, trader, kMax)
-```{r message=FALSE, warning=FALSE}
-getFundingOrder <- function(forecast, price, premium, trader, kMax) {
-  if (forecast > premium) {
-    print("BUY")
-    # Return Buy order
-    return(list(trader, price*(1-kMax), 1))
-  } else {
-    print("SELL")
-    # Return Sell order
-    return(list(trader, -1*price*(1+kMax), 1))
-  }
-}
-```
-
-getForecast(trader, prices, sigmaE, t)
-```{r message=FALSE, warning=FALSE}
-# Function that generates a forecast given a trader, the spot price history and the perp price history
-getForecast <- function(trader, prices, sigmaE, t) {
-  # The Fundamentalist believes the price reverts to the mean. The return expectation is scaled by the number of ticks
-  fundamental_forecast <- log(mean(prices)/prices[t])
-  
-  # The chartist averages the sum of simple returns [P(t) - P(t-1)]/P(t-1) over a time horizon randomly chosen from [lMin, lMax]
-  l <- sample(lMin:lMax, 1)
-  horizon <- t - l
-  simple_returns <- (prices[t:horizon] - prices[(t-1):(horizon - 1)])/prices[(t-1):(horizon - 1)]
-  chartist_forecast <- (cumsum(simple_returns)/l)[l]
-  
-  # The noise trader produces a random forecast
-  noise_forecast <- sigmaE * runif(1)
-  
-  # Composite forecast
-  fundamental_weight <- getAgentParameter(trader, "Fundamentalist")
-  chartist_weight <- getAgentParameter(trader, "Chartist")
-  noise_weight <- getAgentParameter(trader, "Noise")
-  total_weight <- fundamental_weight + chartist_weight + noise_weight
-  
-  # The combined weighted expectation 
-  price_expectation <- (fundamental_weight*fundamental_forecast + chartist_weight*chartist_forecast + noise_weight*noise_forecast)/total_weight
-  
-  # Return the forecast
-  prices[t]*exp(price_expectation)
-}
-```
-getOrder(trader, premia, perp_prices, t, bias, close_position_probability, sigmaE)
-```{r message=FALSE, warning=FALSE}
-getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probability, sigmaE) {
-  # Get agent params  
-  k <- runif(1, 0, getAgentParameter(trader, "Spread"))
-  
-  # Randomly close positions for some traders and exit (allowing for trader distribution to be dynamic over time)
-  if (runif(1) < close_position_probability) {
-    setAgentParameter(trader, "Side", -1)
-    print("Exiting")
-    return(list(trader, 0, 0))
-  }
-  
-  # Generate price forecast
-  price_forecast <- getForecast(trader, perp_prices, sigmaE, t)
-  
-  # Get trader side
-  side <- getAgentParameter(trader, "Side")
-  
-  # If new trader, randomly assign a side
-  if (side == -1) {
-    trader <- setAgentParameter(trader, "Side", sample(c(0,1), 1))
-    print("Randomly assigning side")
-  }
-  
-  # If long trader 
-  if (getAgentParameter(trader, "Side") == 0) {
-    # Assign basis or positional trade based on bias
-    if (runif(1) < bias) {
-      print("Long trader positional")
-      # Generate and return positional order
-      return(getPositionalOrder(price_forecast, perp_prices[t], trader, k))
-      
-    } else {
-      print("Long trader funding")
-      # Adjust premia by adding lowest negative value to make all data positive
-      adjusted_premia <- premia + min(premia)
-      
-      # Generate funding forecast
-      forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
-      
-      # Generate and return order
-      return(getFundingOrder(forecast, price_forecast, adjusted_premia[t], trader, k))
-    }
-    
-  # Else short trader
-  } else { 
-    # Assign basis or arbitrage trade based on bias
-    if (runif(1) > bias) {
-      print("Short trader positional")
-      # Generate and return short positional order
-      return(getPositionalOrder(price_forecast, perp_prices[t], trader, k))
-    } else {
-      print("Short trader funding")
-      # Adjust premia by adding lowest negative value to make all data positive
-      adjusted_premia <- premia + min(premia)
-      
-      # Generate funding forecast
-      forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
-      
-      # Generate and return order
-      return(getFundingOrder(forecast, price_forecast, adjusted_premia[t], trader, k))
-    }
-  }
-}
-```
-
-addOrder(orderbook, order, time, type) 
-
-```{r message=FALSE, warning=FALSE}
-addOrder <- function(ob, order, t) {
-  price <- order[[2]]
-  size <- order[[3]]
-  
-  # Buy
-  if(price > 0) {
-    
-    # Get best ask
-    best_ask <- best.ask(ob)["price"] 
-    
-    # If price less than current best ask
-    if (is.na(best_ask) || price < best_ask) {
-      
-      # Set limit order
-      ob <- add.order(ob, price, size, type = "BID", time = t)
-      return(list(ob, NULL))
-      
-    } else {
-      
-      # Else add market order
-      ob <- market.order(ob, size, "BUY")
-      return(list(ob, best_ask))
-      
-    }
-  # Sell
-  } else if(price < 0) {
-    
-    # Remove negative sign for sell
-    price <- abs(price)
-    
-    # Get best bid
-    best_bid <- best.bid(ob)["price"] 
-    
-    # If price greater than current best bid
-    if (is.na(best_bid) || price > best.bid(ob)["price"]) {
-      
-      # Set limit order
-      ob <- add.order(ob, price, size, type = "ASK", time = t)
-      return(list(ob, NULL))
-      
-    } else {
-      
-      # Else add market order
-      ob <- market.order(ob, size, "SELL")
-      return(list(ob, best_bid))
-      
-    }
-  # Exit market
-  } else {
-    
-    return(list(ob, NULL))
-    
-  }
-}
-```
-
 ## Test forecast and order generation
 
 ```{r message=FALSE, warning=FALSE}
-perp_prices <- window(spot_price, start = 0, end = 1000)
+perp_prices <- spot_price + runif(1001, -1, 1)
 
-premia <- perp_prices - spot_price + runif(1000, 0, 1)
+premia <- perp_prices - spot_price
 
-trader <- createAgentVector(1, 1, 1, 0.25, 0, 0.005)
-
-bias <- 0.2
+bias <- 0.5
 
 close_position_probability <- 0.2
 
-sigmaE <- 0.5
+sigmaE <- 0.05
 
 t <- 250
 
-nSims <- 260
-
-# order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
-order1 <- list(trader, -100, 1)
+nSims <- 300
 
 ob <- orderbook("orderbook.txt")
+
+for(i in 1:5) {
+  ob <- add.order(ob, spot_price[t-1] - sample(0:10, 1), 1, type = "BID", time = t)
+  ob <- add.order(ob, spot_price[t-1] + sample(0:10, 1), 1, type = "ASK", time = t) 
+}
 
 for (t in 250:nSims) {
   # Select random trader
@@ -359,20 +128,11 @@ for (t in 250:nSims) {
   # Clean old trades
 }
 
-spot_price[250:nSims]
-perp_prices[250:nSims]
-premia[250:nSims]
+plot(spot_price[250:nSims])
+plot(perp_prices[250:nSims])
+# premia[250:nSims]
+show(ob)
 ```
-
-
-
-
-
-
-
-
-
-
 
 
 
