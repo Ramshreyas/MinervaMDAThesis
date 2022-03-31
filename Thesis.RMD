@@ -81,10 +81,11 @@ sigmaE <- 0.05
 
 t <- 250
 
-nSims <- 300
+nSims <- 260
 
 ob <- orderbook("orderbook.txt")
 
+# Pre-populate some bids and asks around the spot price
 for(i in 1:5) {
   ob <- add.order(ob, spot_price[t-1] - sample(0:10, 1), 1, type = "BID", time = t)
   ob <- add.order(ob, spot_price[t-1] + sample(0:10, 1), 1, type = "ASK", time = t) 
@@ -102,7 +103,7 @@ for (t in 250:nSims) {
   # Add to book as market or limit
   result <- addOrder(ob, order, t)
   ob <- result[[1]]
-  tradePrice <- result[[2]][["price"]]
+  tradePrice <- result[[2]]["price"]
   
   # Get best Ask and Bid, handle NA
   best_ask <- best.ask(ob)[["price"]]

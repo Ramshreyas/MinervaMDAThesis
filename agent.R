@@ -2,7 +2,7 @@
 # Fundamentalist Chartist and Noise Weights, Horizon for momentum rules, Randomized Spread size
 createAgentVector <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
   c(sigmaF * runif(1),
-    sigmaC * runif(1, -1, 1),
+    sigmaC * runif(1, 0, 1),
     sigmaN * runif(1, -1, 1),
     sample(lMin:lMax, 1),
     kMax * runif(1),

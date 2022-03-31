@@ -126,7 +126,7 @@ addOrder <- function(ob, order, t) {
     if (is.na(best_ask) || price < best_ask) {
       
       # Set limit order
-      ob <- add.order(ob, price, size, type = "BID", time = t)
+      ob <- add.order(ob, price, size, type = "BID", time = t, id = t)
       return(list(ob, NULL))
       
     } else {
@@ -146,10 +146,10 @@ addOrder <- function(ob, order, t) {
     best_bid <- best.bid(ob)[["price"]] 
     
     # If price greater than current best bid
-    if (is.na(best_bid) || price > best.bid(ob)["price"]) {
+    if (is.na(best_bid) || price > best_bid) {
       
       # Set limit order
-      ob <- add.order(ob, price, size, type = "ASK", time = t)
+      ob <- add.order(ob, price, size, type = "ASK", time = t, id = t)
       return(list(ob, NULL))
       
     } else {
@@ -167,18 +167,12 @@ addOrder <- function(ob, order, t) {
   }
 }
 
-removeOldOrders <- function(ob, tMax) {
-  # Get total number of orders
-  n <- bid.orders(ob) + ask.orders(ob)
-  
-  for(i in 1:n) {
-    # Get order
-    
-    
-    # Check if it is older than tMax
-    
-    # If so, remove
-    ob <- remove.order(ob, i)
+removeOldOrders <- function(ob, tau, t) {
+  if(t > tau) {
+    for(i in 1:t - tau) {
+      # If so, remove
+      ob <- remove.order(ob, i)
+    } 
   }
   
   ob

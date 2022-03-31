@@ -49,17 +49,61 @@ sigmaE <- 0.05
 
 t <- 250
 
-nSims <- 400
+tMax <- 1000
 
-tau <- 10
+tau <- 50
 
 ob <- orderbook("orderbook.txt")
 
 plot(spot_price)
 
-for(i in 1:5) {
-  ob <- add.order(ob, spot_price[t-1] - sample(0:10, 1), 1, type = "BID", time = t)
-  ob <- add.order(ob, spot_price[t-1] + sample(0:10, 1), 1, type = "ASK", time = t) 
+for(i in 1:20) {
+  if(i %% 2 == 0) {
+    ob <- add.order(ob, spot_price[t-1] - sample(0:50, 1), 1, type = "BID", time = t, id = 200 + i)
+  } else {
+    ob <- add.order(ob, spot_price[t-1] + sample(0:50, 1), 1, type = "ASK", time = t, id = 200 + i)
+  } 
+}
+
+show(ob)
+
+for (t in 250:tMax) {
+  # Select random trader
+  trader <- traders[sample(1:nAgents, 1), ]
+  
+  # Get order
+  order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+  price <- order[[2]]
+  size <- order[[3]]
+  
+  # Add to book as market or limit
+  result <- addOrder(ob, order, t)
+  ob <- result[[1]]
+  tradePrice <- result[[2]]
+  
+  # Get best Ask and Bid, handle NA
+  best_ask <- best.ask(ob)[["price"]]
+  if(is.na(best_ask)) { best_ask <- 0 }
+  best_bid <- best.bid(ob)[["price"]]
+  if(is.na(best_bid)) { best_bid <- 0 }
+  
+  # Check if trade occurs
+  if (is.null(tradePrice)) {
+    # Update perp price as midpoint between best ask and best bid
+    tradePrice <- mid.point(ob)
+    perp_prices[t+1] <- tradePrice
+    
+  } else {
+    # Update perp_price as trade price
+    perp_prices[t+1] <- tradePrice
+    
+  }
+  
+  # Update premia
+  premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
+  
+  # Clean old trades 
+  ob <- removeOldOrders(ob, tau, t)
 }
 
 trader <- traders[sample(1:nAgents, 1), ]
@@ -89,3 +133,5 @@ order
 result <- addOrder(ob, order, t)
 
 result
+
+mid.point(ob)
