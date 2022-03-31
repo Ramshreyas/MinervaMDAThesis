@@ -1,5 +1,12 @@
 # Function that generates a forecast given a trader, the spot price history and the perp price history
 getForecast <- function(trader, prices, sigmaE, t) {
+  
+  if(is.na(prices[t])) { 
+    print("Error! Price:")
+    print(prices[t])
+    stop()
+  }
+  
   # The Fundamentalist believes the price reverts to the mean. The return expectation is scaled by the number of ticks
   fundamental_forecast <- log(mean(prices)/prices[t])
   
@@ -36,4 +43,5 @@ getForecast <- function(trader, prices, sigmaE, t) {
   print("Forecast: ")
   print(forecast)
   forecast
+  
 }

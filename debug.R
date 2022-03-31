@@ -7,16 +7,18 @@ source("forecast.R")
 source("agent.R")
 source("orderbook.R")
 
-spot_price <- gbm(x0=100, mu=1, sigma=1, t0=0, t=1, n=1000)
+tMax <- 2000
+
+spot_price <- gbm(x0=100, mu=1, sigma=0.2, t0=0, t=1, n=tMax)
 
 # Set number of agents
-nAgents <- 100
+nAgents <- 200
 
 # Fundamentalist weight
-sigmaF <- 1
+sigmaF <- 0
 
 # Chartist weight
-sigmaC <- 10
+sigmaC <- 20
 
 # Noise weight
 sigmaN <- 1
@@ -25,8 +27,8 @@ sigmaN <- 1
 kMax <- 0.5
 
 # horizons for momentum rules - bounds for how far back should they go to estimate trend
-lMin <- 5
-lMax <- 50
+lMin <- 1
+lMax <- 10
 
 # Initialize traders list
 traders <- data.frame(matrix(ncol = 6, nrow = 0))
@@ -37,21 +39,19 @@ for (i in 1:nAgents) {
   traders[i,] <- createAgentVector(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax)
 }
 
-perp_prices <- spot_price + runif(1001, -1, 1)
+perp_prices <- spot_price + runif(tMax+1, -1, 1)
 
 premia <- perp_prices - spot_price
 
 bias <- 0.5
 
-close_position_probability <- 0.2
+close_position_probability <- 0.05
 
 sigmaE <- 0.05
 
 t <- 250
 
-tMax <- 1000
-
-tau <- 50
+tau <- 5
 
 cohortSize <- 5
 
@@ -59,47 +59,57 @@ ob <- orderbook("orderbook.txt")
 
 plot(spot_price)
 
-for(i in 1:20) {
+for(i in (t - 2*tau):(t-1)) {
   if(i %% 2 == 0) {
-    ob <- add.order(ob, spot_price[t-1] - sample(0:50, 1), 1, type = "BID", time = t, id = 200 + i)
+    ob <- add.order(ob, spot_price[i] - sample(0:10, 1), 1, type = "BID", time = t, id = i)
   } else {
-    ob <- add.order(ob, spot_price[t-1] + sample(0:50, 1), 1, type = "ASK", time = t, id = 200 + i)
+    ob <- add.order(ob, spot_price[i] + sample(0:10, 1), 1, type = "ASK", time = t, id = i)
   } 
 }
 
 show(ob)
 
 for (t in 250:tMax) {
-  # Select random trader
-  trader <- traders[sample(1:nAgents, 1), ]
+  # Select random traders
+  cohort <- traders[sample(1:nAgents, cohortSize), ]
   
-  # Get order
-  order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
-  price <- order[[2]]
-  size <- order[[3]]
+  newPrice <- NULL
   
-  # Add to book as market or limit
-  result <- addOrder(ob, order, t)
-  ob <- result[[1]]
-  tradePrice <- result[[2]]
-  
-  # Get best Ask and Bid, handle NA
-  best_ask <- best.ask(ob)[["price"]]
-  if(is.na(best_ask)) { best_ask <- 0 }
-  best_bid <- best.bid(ob)[["price"]]
-  if(is.na(best_bid)) { best_bid <- 0 }
-  
-  # Check if trade occurs
-  if (is.null(tradePrice)) {
-    # Update perp price as midpoint between best ask and best bid
-    tradePrice <- mid.point(ob)
-    perp_prices[t+1] <- tradePrice
+  # Iteratively make bids and asks on the same price point, exit if trade occurs
+  for (row in 1:cohortSize) {
+    # Get trader
+    trader <- cohort[row, ]
     
-  } else {
-    # Update perp_price as trade price
-    perp_prices[t+1] <- tradePrice
+    # Get order
+    order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+    price <- order[[2]]
+    size <- order[[3]]
     
+    if(price == 0) next
+    
+    # Add to book as market or limit
+    result <- addOrder(ob, order, t)
+    ob <- result[[1]]
+    newPrice <- result[[2]]
+    
+    # Check if trade occurs
+    if (!is.null(newPrice)) {
+      break()
+    }
   }
+  
+  # If no trade occurred, set price to mid point
+  if (is.null(newPrice)) {
+    # Update perp price as midpoint between best ask and best bid
+    newPrice <- mid.point(ob)
+  }
+  
+  if(is.na(newPrice)) {
+    newPrice <- spot_price[t] + runif(1)
+  }
+  
+  # Update perp_prices
+  perp_prices[t+1] <- newPrice
   
   # Update premia
   premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
@@ -108,32 +118,6 @@ for (t in 250:tMax) {
   ob <- removeOldOrders(ob, tau, t)
 }
 
-trader <- traders[sample(1:nAgents, 1), ]
+plot(spot_price[250:tMax], type = "l", col = "red")
+lines(perp_prices[250:tMax], col = "green")
 
-trader <- setAgentParameter(trader, "Side", 0)
-
-trader <- setAgentParameter(trader, "Side", 1)
-
-trader
-
-k <- runif(1, 0, getAgentParameter(trader, "Spread"))
-
-price_forecast <- getForecast(trader, perp_prices, sigmaE, t)
-
-order <- getPositionalOrder(price_forecast, perp_prices[t], trader, k)
-
-order
-
-adjusted_premia <- premia + abs(min(premia)) + 1
-
-forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
-
-order <- getFundingOrder(forecast, price_forecast, adjusted_premia[t], trader, k)
-
-order
-
-result <- addOrder(ob, order, t)
-
-result
-
-mid.point(ob)

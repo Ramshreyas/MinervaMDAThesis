@@ -33,7 +33,7 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
     } else {
       print("Long trader funding")
       # Adjust premia by adding lowest negative value to make all data positive
-      adjusted_premia <- premia + abs(min(premia)) + 1
+      adjusted_premia <- premia + abs(min(premia[1:t])) + 1
       
       # Generate funding forecast
       forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
@@ -52,7 +52,7 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
     } else {
       print("Short trader funding")
       # Adjust premia by adding lowest negative value to make all data positive
-      adjusted_premia <- premia + abs(min(premia)) + 1
+      adjusted_premia <- premia + abs(min(premia[1:t])) + 1
       
       # Generate funding forecast
       forecast <- getForecast(trader, adjusted_premia, sigmaE, t)
@@ -65,15 +65,8 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
 
 # Helpers
 getPositionalOrder <- function(forecast, price, trader, kMax) {
-  if(is.null(forecast) | is.null(price) | is.infinite(price) | is.infinite(forecast)) {
-    print("Forecast: ", forecast)
-    print("Price: ", price)
-    print("Trader: ", trader)
-    print("kMax: ", kMax)
-    stop("ERROR!!")
-  } 
   
-  # Get trader side
+  # Get side of market
   side <- getAgentParameter(trader, "Side")
   
   if (forecast > price & side == 0 | forecast < price & side == 1) {
@@ -88,25 +81,18 @@ getPositionalOrder <- function(forecast, price, trader, kMax) {
 }
 
 getFundingOrder <- function(forecast, price, premium, trader, kMax) {
-  if(is.null(forecast) | is.null(price) | is.infinite(price) | is.infinite(forecast)) {
-    print("Forecast: ", forecast)
-    print("Price: ", price)
-    print("Trader: ", trader)
-    print("kMax: ", kMax)
-    stop("ERROR!!")
-  } 
   
-  # Get trader side
+  # Get side of market
   side <- getAgentParameter(trader, "Side")
   
-  if (forecast > premium & side == 0 | forecast < premium & side == 1) {
+  if (forecast < premium & side == 0 | forecast > premium & side == 1) {
     print("BUY")
     # Return Buy order
-    return(list(trader, price*(1-kMax), 1))
+    return(list(trader, abs(price)*(1-kMax), 1))
   } else {
     print("SELL")
     # Return Sell order
-    return(list(trader, -1*price*(1+kMax), 1))
+    return(list(trader, -1*abs(price)*(1+kMax), 1))
   }
 }
 
@@ -123,7 +109,7 @@ addOrder <- function(ob, order, t) {
     best_ask <- best.ask(ob)[["price"]] 
     
     # If price less than current best ask
-    if (is.na(best_ask) || price < best_ask) {
+    if (is.na(best_ask) | price < best_ask) {
       
       # Set limit order
       ob <- add.order(ob, price, size, type = "BID", time = t, id = t)
@@ -146,7 +132,7 @@ addOrder <- function(ob, order, t) {
     best_bid <- best.bid(ob)[["price"]] 
     
     # If price greater than current best bid
-    if (is.na(best_bid) || price > best_bid) {
+    if (is.na(best_bid) | price > best_bid) {
       
       # Set limit order
       ob <- add.order(ob, price, size, type = "ASK", time = t, id = t)

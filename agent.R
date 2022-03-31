@@ -2,8 +2,8 @@
 # Fundamentalist Chartist and Noise Weights, Horizon for momentum rules, Randomized Spread size
 createAgentVector <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
   c(sigmaF * runif(1),
-    sigmaC * runif(1, 0, 1),
-    sigmaN * runif(1, -1, 1),
+    sigmaC * runif(1),
+    sigmaN * runif(1),
     sample(lMin:lMax, 1),
     kMax * runif(1),
     -1)
@@ -11,15 +11,6 @@ createAgentVector <- function(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax) {
 
 # Helper to get Agent parameters
 getAgentParameter <- function(agent, param) {
-  # switch (
-  #   param,
-  #   "Fundamentalist" = agent[1],
-  #   "Chartist" = agent[2],
-  #   "Noise" = agent[3],
-  #   "Horizon" = agent[4],
-  #   "Spread" = agent[5],
-  #   "Side" = agent[6]
-  # )
   agent[, param]
 }
 
