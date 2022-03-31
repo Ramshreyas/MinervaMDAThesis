@@ -53,6 +53,8 @@ tMax <- 1000
 
 tau <- 50
 
+cohortSize <- 5
+
 ob <- orderbook("orderbook.txt")
 
 plot(spot_price)
