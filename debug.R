@@ -7,7 +7,7 @@ source("forecast.R")
 source("agent.R")
 source("orderbook.R")
 
-tMax <- 500
+tMax <- 1000
 
 spot_price <- gbm(x0=100, mu=1, sigma=0.2, t0=0, t=1, n=tMax)
 
@@ -28,7 +28,7 @@ kMax <- 0.5
 
 # horizons for momentum rules - bounds for how far back should they go to estimate trend
 lMin <- 1
-lMax <- 10
+lMax <- 5
 
 # Initialize traders list
 traders <- data.frame(matrix(ncol = 6, nrow = 0))
@@ -43,7 +43,7 @@ perp_prices <- spot_price + runif(tMax+1, -1, 1)
 
 premia <- perp_prices - spot_price
 
-bias <- 0.5
+bias <- 0.6
 
 close_position_probability <- 0.05
 
@@ -51,9 +51,9 @@ sigmaE <- 0.05
 
 t <- 250
 
-tau <- 5
+tau <- 4
 
-cohortSize <- 5
+cohortSize <- 4
 
 ob <- orderbook("orderbook.txt")
 
@@ -81,7 +81,7 @@ for (t in 250:tMax) {
     trader <- cohort[row, ]
     
     # Get order
-    order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
+    order <- getOrder(trader, premia, spot_price, t = t, bias, close_position_probability, sigmaE = sigmaE)
     price <- order[[2]]
     size <- order[[3]]
     

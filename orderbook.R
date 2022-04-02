@@ -1,5 +1,5 @@
 # Get Agent Order
-getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probability, sigmaE) {
+getOrder <- function(trader, premia, prices, t, bias, close_position_probability, sigmaE) {
   # Get agent params  
   k <- runif(1, 0, getAgentParameter(trader, "Spread"))
   
@@ -11,7 +11,7 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
   }
   
   # Generate price forecast
-  price_forecast <- getForecast(trader, perp_prices, sigmaE, t)
+  price_forecast <- getForecast(trader, prices, sigmaE, t)
   
   # Get trader side
   side <- getAgentParameter(trader, "Side")
@@ -25,10 +25,10 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
   # If long trader 
   if (getAgentParameter(trader, "Side") == 0) {
     # Assign basis or positional trade based on bias
-    if (runif(1) < bias) {
+    if (runif(1) > bias) {
       print("Long trader positional")
       # Generate and return positional order
-      return(getPositionalOrder(price_forecast, perp_prices[t], trader, k))
+      return(getPositionalOrder(price_forecast, prices[t], trader, k))
       
     } else {
       print("Long trader funding")
@@ -45,10 +45,10 @@ getOrder <- function(trader, premia, perp_prices, t, bias, close_position_probab
   # Else short trader
   } else { 
     # Assign basis or arbitrage trade based on bias
-    if (runif(1) > bias) {
+    if (runif(1) < bias) {
       print("Short trader positional")
       # Generate and return short positional order
-      return(getPositionalOrder(price_forecast, perp_prices[t], trader, k))
+      return(getPositionalOrder(price_forecast, prices[t], trader, k))
     } else {
       print("Short trader funding")
       # Adjust premia by adding lowest negative value to make all data positive
