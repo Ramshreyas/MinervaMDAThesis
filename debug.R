@@ -7,7 +7,7 @@ source("forecast.R")
 source("agent.R")
 source("orderbook.R")
 
-tMax <- 2000
+tMax <- 500
 
 spot_price <- gbm(x0=100, mu=1, sigma=0.2, t0=0, t=1, n=tMax)
 
