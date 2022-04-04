@@ -6,7 +6,7 @@ getOrder <- function(trader, premia, prices, t, bias, close_position_probability
   # Randomly close positions for some traders and exit (allowing for trader distribution to be dynamic over time)
   if (runif(1) < close_position_probability) {
     setAgentParameter(trader, "Side", -1)
-    print("Exiting")
+    #print("Exiting")
     return(list(trader, 0, 0))
   }
   
@@ -19,19 +19,19 @@ getOrder <- function(trader, premia, prices, t, bias, close_position_probability
   # If new trader, randomly assign a side
   if (side == -1) {
     trader <- setAgentParameter(trader, "Side", sample(c(0,1), 1))
-    print("Randomly assigning side")
+    #print("Randomly assigning side")
   }
   
   # If long trader 
   if (getAgentParameter(trader, "Side") == 0) {
     # Assign basis or positional trade based on bias
     if (runif(1) > bias) {
-      print("Long trader positional")
+      #print("Long trader positional")
       # Generate and return positional order
       return(getPositionalOrder(price_forecast, prices[t], trader, k))
       
     } else {
-      print("Long trader funding")
+      #print("Long trader funding")
       # Adjust premia by adding lowest negative value to make all data positive
       adjusted_premia <- premia + abs(min(premia[1:t])) + 1
       
@@ -46,11 +46,11 @@ getOrder <- function(trader, premia, prices, t, bias, close_position_probability
   } else { 
     # Assign basis or arbitrage trade based on bias
     if (runif(1) < bias) {
-      print("Short trader positional")
+      #print("Short trader positional")
       # Generate and return short positional order
       return(getPositionalOrder(price_forecast, prices[t], trader, k))
     } else {
-      print("Short trader funding")
+      #print("Short trader funding")
       # Adjust premia by adding lowest negative value to make all data positive
       adjusted_premia <- premia + abs(min(premia[1:t])) + 1
       
@@ -70,11 +70,11 @@ getPositionalOrder <- function(forecast, price, trader, kMax) {
   side <- getAgentParameter(trader, "Side")
   
   if (forecast > price & side == 0 | forecast < price & side == 1) {
-    print("BUY")
+    #print("BUY")
     # Return Buy order
     return(list(trader, forecast*(1-kMax), 1))
   } else {
-    print("SELL")
+    #print("SELL")
     # Return Sell order
     return(list(trader, -1*forecast*(1+kMax), 1))
   }
@@ -86,11 +86,11 @@ getFundingOrder <- function(forecast, price, premium, trader, kMax) {
   side <- getAgentParameter(trader, "Side")
   
   if (forecast < premium & side == 0 | forecast > premium & side == 1) {
-    print("BUY")
+    #print("BUY")
     # Return Buy order
     return(list(trader, abs(price)*(1-kMax), 1))
   } else {
-    print("SELL")
+    #print("SELL")
     # Return Sell order
     return(list(trader, -1*abs(price)*(1+kMax), 1))
   }
@@ -99,8 +99,8 @@ getFundingOrder <- function(forecast, price, premium, trader, kMax) {
 addOrder <- function(ob, order, t) {
   price <- order[[2]]
   size <- order[[3]]
-  print("Price:")
-  print(price)
+  # print("Price:")
+  # print(price)
   
   # Buy
   if(price > 0) {

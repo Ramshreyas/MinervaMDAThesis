@@ -23,7 +23,8 @@ source("orderbook.R", local = knitr::knit_global())
 
 ```{r message=FALSE, warning=FALSE}
 # Create GBM with the following values
-spot_price <- gbm(x0=100, mu=1, sigma=1, t0=0, t=1, n=1000)
+tMax <- 2000
+spot_price <- gbm(x0=100, mu=1, sigma=0.2, t0=0, t=1, n=tMax)
 
 # Plot GBM
 autoplot(spot_price)
@@ -36,7 +37,7 @@ autoplot(spot_price)
 nAgents <- 100
 
 # Fundamentalist weight
-sigmaF <- 1
+sigmaF <- 0
 
 # Chartist weight
 sigmaC <- 10
@@ -69,70 +70,88 @@ with(data = traders,
 ## Test forecast and order generation
 
 ```{r message=FALSE, warning=FALSE}
-perp_prices <- spot_price + runif(1001, -1, 1)
+perp_prices <- spot_price + runif(tMax+1, -1, 1)
 
 premia <- perp_prices - spot_price
 
-bias <- 0.5
+bias <- 0.6
 
-close_position_probability <- 0.2
+close_position_probability <- 0.05
 
 sigmaE <- 0.05
 
 t <- 250
 
-nSims <- 260
+tau <- 4
+
+cohortSize <- 4
 
 ob <- orderbook("orderbook.txt")
 
-# Pre-populate some bids and asks around the spot price
-for(i in 1:5) {
-  ob <- add.order(ob, spot_price[t-1] - sample(0:10, 1), 1, type = "BID", time = t)
-  ob <- add.order(ob, spot_price[t-1] + sample(0:10, 1), 1, type = "ASK", time = t) 
+plot(spot_price)
+
+for(i in (t - 2*tau):(t-1)) {
+  if(i %% 2 == 0) {
+    ob <- add.order(ob, spot_price[i] - sample(0:10, 1), 1, type = "BID", time = t, id = i)
+  } else {
+    ob <- add.order(ob, spot_price[i] + sample(0:10, 1), 1, type = "ASK", time = t, id = i)
+  } 
 }
 
-for (t in 250:nSims) {
-  # Select random trader
-  trader <- traders[sample(1:nAgents, 1), ]
-
-  # Get order
-  order <- getOrder(trader, premia, perp_prices, t = t, bias, close_position_probability, sigmaE = sigmaE)
-  price <- order[[2]]
-  size <- order[[3]]
-
-  # Add to book as market or limit
-  result <- addOrder(ob, order, t)
-  ob <- result[[1]]
-  tradePrice <- result[[2]]["price"]
+for (t in 250:tMax) {
+  # Select random traders
+  cohort <- traders[sample(1:nAgents, cohortSize), ]
   
-  # Get best Ask and Bid, handle NA
-  best_ask <- best.ask(ob)[["price"]]
-  if(is.na(best_ask)) { best_ask <- 0 }
-  best_bid <- best.bid(ob)[["price"]]
-  if(is.na(best_bid)) { best_bid <- 0 }
-
-  # Check if trade occurs
-  if (is.null(tradePrice)) {
-    # Update perp price as midpoint between best ask and best bid
-    tradePrice <- (best_bid + best_ask)/2
-    perp_prices[t+1] <- tradePrice
-
-  } else {
-    # Update perp_price as trade price
-    perp_prices[t+1] <- tradePrice
-
+  newPrice <- NULL
+  
+  # Iteratively make bids and asks on the same price point, exit if trade occurs
+  for (row in 1:cohortSize) {
+    # Get trader
+    trader <- cohort[row, ]
+    
+    # Get order
+    order <- getOrder(trader, premia, spot_price, t = t, bias, close_position_probability, sigmaE = sigmaE)
+    price <- order[[2]]
+    size <- order[[3]]
+    
+    if(price == 0) next
+    
+    # Add to book as market or limit
+    result <- addOrder(ob, order, t)
+    ob <- result[[1]]
+    newPrice <- result[[2]]
+    
+    # Check if trade occurs
+    if (!is.null(newPrice)) {
+      break()
+    }
   }
-
+  
+  # If no trade occurred, set price to mid point
+  if (is.null(newPrice)) {
+    # Update perp price as midpoint between best ask and best bid
+    newPrice <- mid.point(ob)
+  }
+  
+  if(is.na(newPrice)) {
+    newPrice <- spot_price[t] + runif(1)
+  }
+  
+  # Update perp_prices
+  perp_prices[t+1] <- newPrice
+  
   # Update premia
   premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
-
-  # Clean old trades
+  
+  # Clean old trades 
+  ob <- removeOldOrders(ob, tau, t)
 }
 
-plot(spot_price[250:nSims])
-plot(perp_prices[250:nSims])
-# premia[250:nSims]
-show(ob)
+plot(spot_price[250:tMax], type = "l", col = "red")
+lines(perp_prices[250:tMax], col = "green")
+
+plot(premia[250:tMax], type = "l")
+
 ```
 
 

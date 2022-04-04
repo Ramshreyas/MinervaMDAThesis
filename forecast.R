@@ -30,18 +30,18 @@ getForecast <- function(trader, prices, sigmaE, t) {
 
   # Return the forecast
   forecast <- prices[t]*exp(price_expectation)
-  print("Fundamental Forecast")
-  print(fundamental_forecast)
-  print("Chartist Forecast")
-  print(chartist_forecast)
-  print("Noise Forecast")
-  print(noise_forecast)
-  print("Price[t]: ")
-  print(prices[t])
-  print("price_expectation: ")
-  print(price_expectation)
-  print("Forecast: ")
-  print(forecast)
+  # print("Fundamental Forecast")
+  # print(fundamental_forecast)
+  # print("Chartist Forecast")
+  # print(chartist_forecast)
+  # print("Noise Forecast")
+  # print(noise_forecast)
+  # print("Price[t]: ")
+  # print(prices[t])
+  # print("price_expectation: ")
+  # print(price_expectation)
+  # print("Forecast: ")
+  # print(forecast)
   forecast
   
 }
