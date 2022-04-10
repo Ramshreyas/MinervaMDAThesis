@@ -9,7 +9,7 @@ source("orderbook.R")
 
 tMax <- 1000
 
-spot_price <- gbm(x0=100, mu=1, sigma=0.2, t0=0, t=1, n=tMax)
+spot_price <- gbm(x0=100, mu=1, sigma=0.5, t0=0, t=1, n=tMax)
 
 # Set number of agents
 nAgents <- 200
@@ -18,7 +18,7 @@ nAgents <- 200
 sigmaF <- 0
 
 # Chartist weight
-sigmaC <- 20
+sigmaC <- 10
 
 # Noise weight
 sigmaN <- 1
@@ -43,7 +43,7 @@ perp_prices <- spot_price + runif(tMax+1, -1, 1)
 
 premia <- perp_prices - spot_price
 
-bias <- 0.6
+bias <- 0.5
 
 close_position_probability <- 0.05
 
@@ -56,8 +56,6 @@ tau <- 4
 cohortSize <- 4
 
 ob <- orderbook("orderbook.txt")
-
-plot(spot_price)
 
 for(i in (t - 2*tau):(t-1)) {
   if(i %% 2 == 0) {
@@ -106,6 +104,7 @@ for (t in 250:tMax) {
   
   if(is.na(newPrice)) {
     newPrice <- spot_price[t] + runif(1)
+    # newPrice <- perp_prices[t-1]
   }
   
   # Update perp_prices
@@ -118,6 +117,13 @@ for (t in 250:tMax) {
   ob <- removeOldOrders(ob, tau, t)
 }
 
-plot(spot_price[250:tMax], type = "l", col = "red")
+# par(mar = c(4, 4, 2, .1))
+# 
+plot(spot_price[250:tMax], type = "l", col = "red", main = "Spot vs Perp Prices", xlab = "Timestep", ylab = "Price")
 lines(perp_prices[250:tMax], col = "green")
+legend("topleft", legend=c("Spot price", "Perp price"),
+       col=c("red", "green"), lty=c(1,1), cex=1)
+
+plot(premia[250:tMax], type = "l", main = "Premium", xlab = "Timestep", ylab = "Price")
+abline(h = 0)
 
