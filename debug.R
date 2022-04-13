@@ -21,7 +21,7 @@ sigmaF <- 0
 sigmaC <- 10
 
 # Noise weight
-sigmaN <- 1
+sigmaN <- 10
 
 # random component of spread
 kMax <- 0.5
@@ -33,15 +33,6 @@ lMax <- 5
 # Initialize traders list
 traders <- data.frame(matrix(ncol = 6, nrow = 0))
 names(traders) <- c("Fundamentalist", "Chartist", "Noise", "Horizon", "Spread", "Side")
-
-# Create traders
-for (i in 1:nAgents) {
-  traders[i,] <- createAgentVector(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax)
-}
-
-perp_prices <- spot_price + runif(tMax+1, -1, 1)
-
-premia <- perp_prices - spot_price
 
 bias <- 0.5
 
@@ -55,91 +46,88 @@ tau <- 4
 
 cohortSize <- 4
 
+perp_prices <- spot_price + runif(tMax+1, -1, 1)
+perp_prices[250:tMax + 1] <- rep(0,tMax + 1)
+
+premia <- perp_prices - spot_price
+premia[250:tMax + 1] <- rep(0,tMax + 1)
+
+# Create traders
+for (i in 1:nAgents) {
+  traders[i,] <- createAgentVector(sigmaF, sigmaC, sigmaN, kMax, lMin, lMax)
+}
+
 ob <- orderbook("orderbook.txt")
 
-sims <- data.frame(matrix(ncol = 10, nrow = 1001))
-premia_sims <- data.frame(matrix(ncol = 10, nrow = 1001))
-
-for (sigmaN in 1:10) {
-  
-  for(i in (t - 2*tau):(t-1)) {
-    if(i %% 2 == 0) {
-      ob <- add.order(ob, spot_price[i] - sample(0:10, 1), 1, type = "BID", time = t, id = i)
-    } else {
-      ob <- add.order(ob, spot_price[i] + sample(0:10, 1), 1, type = "ASK", time = t, id = i)
-    } 
-  }
-
-  for (t in 250:tMax) {
-    # Select random traders
-    cohort <- traders[sample(1:nAgents, cohortSize), ]
-    
-    newPrice <- NULL
-    
-    # Iteratively make bids and asks on the same price point, exit if trade occurs
-    for (row in 1:cohortSize) {
-      # Get trader
-      trader <- cohort[row, ]
-      
-      # Get order
-      order <- getOrder(trader, premia, spot_price, t = t, bias, close_position_probability, sigmaE = sigmaE)
-      price <- order[[2]]
-      size <- order[[3]]
-      
-      if(price == 0) next
-      
-      # Add to book as market or limit
-      result <- addOrder(ob, order, t)
-      ob <- result[[1]]
-      newPrice <- result[[2]]
-      
-      # Check if trade occurs
-      if (!is.null(newPrice)) {
-        break()
-      }
-    }
-    
-    # If no trade occurred, set price to mid point
-    if (is.null(newPrice)) {
-      # Update perp price as midpoint between best ask and best bid
-      newPrice <- mid.point(ob)
-    }
-    
-    if(is.na(newPrice)) {
-      #newPrice <- spot_price[t] + runif(1)
-      newPrice <- perp_prices[t]
-    }
-    
-    # Update perp_prices
-    perp_prices[t+1] <- newPrice
-    
-    # Update premia
-    premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
-    
-    # Clean old trades 
-    ob <- removeOldOrders(ob, tau, t)
-  }
-
-  sims[, sigmaN] <- perp_prices
-  premia_sims[, sigmaN] <- premia
-  
+for(i in (t - 2*tau):(t-1)) {
+  if(i %% 2 == 0) {
+    ob <- add.order(ob, spot_price[i] - sample(0:10, 1), 1, type = "BID", time = t, id = i)
+  } else {
+    ob <- add.order(ob, spot_price[i] + sample(0:10, 1), 1, type = "ASK", time = t, id = i)
+  } 
 }
 
-print("SIMS DONE")
-
-for (i in 1:10) {
-  premia <- sims[,i] - spot_price
-
-  title <- paste0("Chartist : Noise :: ", sigmaC, " : ", i)
-
-  plot(spot_price[250:tMax], type = "l", col = "red", main = title, xlab = "Timestep", ylab = "Price")
-  lines(sims[250:tMax, i], col = "green")
-  legend("topleft", legend=c("Spot price", "Perp price"),
-         col=c("red", "green"), lty=c(1,1), cex=1)
-
-  plot(premia[250:tMax], type = "l", main = "Premium", xlab = "Timestep", ylab = "Price")
-  abline(h = 0)
+for (t in 250:tMax) {
+  # Select random traders
+  cohort <- traders[sample(1:nAgents, cohortSize), ]
+  
+  newPrice <- NULL
+  
+  # Iteratively make bids and asks on the same price point, exit if trade occurs
+  for (row in 1:cohortSize) {
+    # Get trader
+    trader <- cohort[row, ]
+    
+    # Get order
+    order <- getOrder(trader, premia, spot_price, t = t, bias, close_position_probability, sigmaE = sigmaE)
+    price <- order[[2]]
+    size <- order[[3]]
+    
+    if(price == 0) next
+    
+    # Add to book as market or limit
+    result <- addOrder(ob, order, t)
+    ob <- result[[1]]
+    newPrice <- result[[2]]
+    
+    # Check if trade occurs
+    if (!is.null(newPrice)) {
+      break()
+    }
+  }
+  
+  # If no trade occurred, set price to mid point
+  if (is.null(newPrice)) {
+    # Update perp price as midpoint between best ask and best bid
+    newPrice <- mid.point(ob)
+  }
+  
+  if(is.na(newPrice)) {
+    #newPrice <- spot_price[t] + runif(1)
+    newPrice <- perp_prices[t]
+  }
+  
+  # Update perp_prices
+  perp_prices[t+1] <- newPrice
+  
+  # Update premia
+  premia[t+1] <- perp_prices[t+1] - spot_price[t+1]
+  
+  # Clean old trades 
+  ob <- removeOldOrders(ob, tau, t)
 }
+
+title <- paste0("Chartist:Noise = ", sigmaC, " : ", sigmaN)
+
+plot(spot_price[250:tMax], type = "l", col = "red", main = title, xlab = "Timestep", ylab = "Price")
+lines(perp_prices[250:tMax], col = "green")
+legend("topleft", legend=c("Spot price", "Perp price"),
+       col=c("red", "green"), lty=c(1,1), cex=1)
+
+plot(premia[250:tMax], type = "l", main = "Premium", xlab = "Timestep", ylab = "Price")
+abline(h = 0)
 
 print("Plots done")
+
+
 

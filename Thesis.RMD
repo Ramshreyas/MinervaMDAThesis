@@ -25,19 +25,19 @@ source("orderbook.R", local = knitr::knit_global())
 
 ---
 
-We first consider a spot market whose prices are represented by a Geometric Brownian Motion:
+We first consider a Spot market whose prices are represented by a Geometric Brownian Motion:
 
 $\Delta S_t = \mu \Delta t + \sigma \epsilon \sqrt{\Delta t}$ 
 
 Here $S_t$ is the stock price at timestep $t$, $\mu$ is a constant 'drift' parameter, and $\sigma$ is a constant volatility parameter. $\Delta S_t$ is the increment or decrement applied to the current spot price at time $t$ to generate the spot price at $t+1$. 
 
-Next, we consider a perp market derived from this spot market, with 200 traders. At any time $t$, the entire history of both the spot market and perp market prices for the time interval $(1,2...t)$ are visible to the traders in the perp market. 
+Next, we consider a Perp market derived from this spot market, with 200 traders. At any time $t$, the entire history of both the Spot market and Perp market prices for the time interval $(1,2...t)$ are visible to the traders in the perp market. Pricing decisions are entirely based on forecasts using past information.
 
 The $Premium$ at any time $t$ is defined as:
 
 $Premium_t = Perp\ price_t - Spot\ price_t$
 
-```{r, echo=FALSE,out.width="49%", out.height="20%",fig.show='hold',fig.align='left', fig.cap="Figure 1: Results of a simulation run with $\\mu = 1$, $\\sigma = 0.5$ and $S_0 = 100$. On the left we see the Spot Prices vs the Perp Prices. The 'peg' is clearly holding, with the Perp prices in green tracking the spot prices in red. On the right we see a chart of the premium, the difference between the Perp and Spot prices."}
+```{r, echo=FALSE, out.width="49%", out.height="20%",fig.show='hold',fig.align='left', fig.cap="**Figure 1: Results of a simulation run with $\\mu = 1$, $\\sigma = 0.5$ and $S_0 = 100$. On the left we see the Spot Prices vs the Perp Prices. The 'peg' is clearly holding, with the Perp prices in green tracking the spot prices in red. On the right we see a chart of the premium, the difference between the Perp and Spot prices over time.**"}
 knitr::include_graphics(c("Figures/Spot_Perps1.png","Figures/Premia1.png"))
 ``` 
 
@@ -75,12 +75,33 @@ $cohort_{size}$: The number of randomly drawn traders who participate in trading
 
 ### Simulations
 
-We start by analyzing the effect of varying the strategy-weighting parameters on the 'peg' of the perp price to the spot price. As discussed in the methods section, the fundamental strategy has zero weight, because it has no meaning in the Perpetual Futures context. This leaves the relative weightage of chartist and noise traders. By keeping the noise parameter constant at $10$ and varying the chartist trader from $1$ to $20$, we can see a range of regimes where the chartist is $\frac{1}{10}$ of the noise trader to the noise trader being $\frac{1}{10}$ of the chartist.
+We start by exploring the effect of varying the strategy-weighting parameters on the 'peg' of the Perp price to the Spot price. This is done first to identify suitable relative weights of trader strategies, enabling us to fix them and therafter examine the effects of the other parameters on Market dynamics. As discussed in the methods section, the fundamental strategy has zero weight, because it has no meaning in the Perpetual Futures context. This leaves the relative weights of Chartist and Noise traders to consider. By keeping the chartist weight constant at $10$ and varying the Noise weight from $1$ to $10$, we can see a range of regimes where the Noise trader is $\frac{1}{10}$ of the Chartist trader to the Noise trader being equally weighted compared to the Chartist.
 
-```{r message=FALSE, warning=FALSE}
-
-
+```{r, echo=FALSE, out.width="49%", out.height="20%",fig.show='hold',fig.align='left', fig.cap="**Figure 2: Parameter sweep of the relative weights of Chartist vs Noise traders. Here we see the results of Chartist:Noise weights from 10:0 to 10:10 in increments of 2. The price 'peg' of the Perp to the underlying Spot is not very sensitive to the trading strategies adopted by traders in this market, suggesting the funding rate mechanism is effective in maintaining the price correlation in a wide range of market conditions**"}
+knitr::include_graphics(c("Figures/weight_sweep/Perp_Spot_10_0.png","Figures/weight_sweep/Premium_10_0.png",
+                          "Figures/weight_sweep/Perp_Spot_10_2.png","Figures/weight_sweep/Premium_10_2.png",
+                          "Figures/weight_sweep/Perp_Spot_10_4.png","Figures/weight_sweep/Premium_10_4.png",
+                          "Figures/weight_sweep/Perp_Spot_10_8.png","Figures/weight_sweep/Premium_10_8.png",
+                          "Figures/weight_sweep/Perp_Spot_10_10.png","Figures/weight_sweep/Premium_10_10.png"))
 ```
 
+Varying the relative weight of Chartist and Noise strategies appears to have little impact on the sensitivity of the peg. This appears to echo the results of the original paper which found that varying the strategy weights produced results that remain 'qualitatively the same' (Chiarella et al, 2002). Further, with only noise traders present, we find that the peg appears to hold, but with greater variation than if Chartist traders are also present. This also echoes the findings of Chiarella et al.(2002), which suggests that the presence of both types of traders is necessary to produce more realistic simulations. It should be noted that this result is sensitive to $\sigma_\epsilon$, which is the volatility parameter used by the noise trader to produce random forecasts. Varying $\sigma_\epsilon$ does vary the error represented by the Premium, but is not of primary interest in examining the properties of the simulation.
 
+```{r, echo=FALSE, out.width="49%", out.height="20%",fig.show='hold',fig.align='left', fig.cap="**Figure 3: If only Noise traders are present, the peg still holds, but with greater deviation than if Chartist traders are also present.**"}
+knitr::include_graphics(c("Figures/only_noise/Perp_Spot.png","Figures/only_noise/Premium.png"))
+``` 
+
+This prima-facie exploration suggests that to explore the market dynamics represented by the other parameters, we can utilize equal weights of Chartist and Noise traders to provide an unbiased basis for exploring the other parameters. The remaining simulation runs in the paper will utilize equally-weighted Chartist and Noise traders.
+
+---
+
+### Analysing the accuracy of the peg
+
+To analyse the properties of the peg, we use Control Charts - a line graph representing a measure over time, with bounds representing an upper and lower control limit typically set at $\pm3$ standard deviations from the mean. In the case of Perpetual Future Premiums, this represents the Spot Price at time $t$, as the $Premium_t$ is the deviation of the Perp price from the spot price at time $t$.
+
+```{r, echo=FALSE, out.width="80%", out.height="80%", fig.show='hold',fig.align='left', fig.cap="<br>**Figure 4: The control chart for a simulation run with $\\mu = 1, \\sigma = 0.5, S_0 = 100, \\sigma_c = 10, \\sigma_n = 10$. The upper and lower control limits are $8.5$ and $-5.7$ respectively, with the center of the distribution at $1.4$, slightly above the expected $0$. The number of 'violations' - Premiums greater than 3 standard deviations from the center - are $89$, marked in Red. Finally, the number violating runs is $148$ - this is a count of the number of consecutive premiums that are continuously increasing or decreasing - an indication of the process deviating from the norm.**"}
+knitr::include_graphics(c("Figures/Shewhart/Sample.png"))
+``` 
+
+---
 
