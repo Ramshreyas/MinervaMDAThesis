@@ -2,10 +2,24 @@ library(somebm)
 library(scatterplot3d)
 library(ggfortify)
 library(orderbook)
+library(qcc)  
 
 source("forecast.R")
 source("agent.R")
 source("orderbook.R")
+
+stats <- list()
+count <- 1
+
+for(bias in c(0.05, 0.1, 0.15, 0.2, 0.25, 0.30, 0.35, 0.4, 0.4, 0.5)){
+
+nSims = 100
+
+perp_sims = data.frame(matrix(nrow = 1001, ncol = nSims))
+spot_sims = data.frame(matrix(nrow = 1001, ncol = nSims))
+prem_sims = data.frame(matrix(nrow = 1001, ncol = nSims))
+
+for(n in 1:nSims) {
 
 tMax <- 1000
 
@@ -34,7 +48,7 @@ lMax <- 5
 traders <- data.frame(matrix(ncol = 6, nrow = 0))
 names(traders) <- c("Fundamentalist", "Chartist", "Noise", "Horizon", "Spread", "Side")
 
-bias <- 0.5
+#bias <- 0.5
 
 close_position_probability <- 0.05
 
@@ -42,7 +56,7 @@ sigmaE <- 0.05
 
 t <- 250
 
-tau <- 4
+tau <- 8
 
 cohortSize <- 4
 
@@ -117,17 +131,92 @@ for (t in 250:tMax) {
   ob <- removeOldOrders(ob, tau, t)
 }
 
-title <- paste0("Chartist:Noise = ", sigmaC, " : ", sigmaN)
+perp_sims[,n] <- perp_prices
+spot_sims[,n] <- spot_price
+prem_sims[,n] <- premia
 
-plot(spot_price[250:tMax], type = "l", col = "red", main = title, xlab = "Timestep", ylab = "Price")
-lines(perp_prices[250:tMax], col = "green")
-legend("topleft", legend=c("Spot price", "Perp price"),
-       col=c("red", "green"), lty=c(1,1), cex=1)
+}
 
-plot(premia[250:tMax], type = "l", main = "Premium", xlab = "Timestep", ylab = "Price")
-abline(h = 0)
+# p <- premia[250:tMax]
+# 
+# title <- paste0("Chartist:Noise = ", sigmaC, " : ", sigmaN)
+# 
+# plot(spot_price[250:tMax], type = "l", col = "red", main = title, xlab = "Timestep", ylab = "Price")
+# lines(perp_prices[250:tMax], col = "green")
+# legend("topleft", legend=c("Spot price", "Perp price"),
+#        col=c("red", "green"), lty=c(1,1), cex=1)
+# 
+# qcc(data = p,
+#     type = "xbar.one",
+#     title = "Shewhart Chart of Premiums", # Replacement title
+#     xlab = "Timestep",
+#     ylab = "Premium",
+#     digits = 2, # Limit the significant figures
+#     plot = TRUE)
 
-print("Plots done")
+print("Sims done")
 
+qs <- data.frame(matrix(nrow = 100, ncol = 6))
+names(qs) <- c("center", "stddev", "lcl", "ucl", "violations", "runs")
 
+for (i in 1:100) {
+  q <- qcc(prem_sims[,i], type = "xbar.one", digits = 2, plot = FALSE)
+  
+  center <- q$center
+  stddev <- q$std.dev
+  lcl <- q$limits[1]
+  ucl <- q$limits[2]
+  violations <- length(q$violations[[1]])
+  runs <- length(q$violations[[2]])
+  qs[i,] <- c(center, stddev, lcl, ucl, violations, runs)
+}
 
+stats[[count]] <- qs
+
+count <- count + 1
+
+}
+
+centers <- stddevs <- lcls <- ucls <- violations <- runs <- c()
+
+for(s in 1:(count-1)) {
+  centers <- append(centers, mean(stats[[s]]$center))
+  stddevs <- append(stddevs, mean(stats[[s]]$stddev))
+  lcls <- append(lcls, mean(stats[[s]]$lcl))
+  ucls <- append(ucls, mean(stats[[s]]$ucl))
+  violations <- append(violations, mean(stats[[s]]$violations))
+  runs <- append(runs, mean(stats[[s]]$runs))
+}
+
+plot(centers, type = 'l', ylim = c(-15,15), 
+     main = 'Varying Bias from 0.05:0.5 - Center, LCL and UCL',
+     xlab = 'Bias',
+     ylab = 'value',
+     xaxt = 'n')
+axis(1, at = 1:10, labels = c(0.05, 0.1, 0.15, 0.2, 0.25, 0.30, 0.35, 0.4, 0.4, 0.5))
+text(1.5, mean(centers) + 2, "Center")
+lines(lcls, col = 'red')
+text(1.5, mean(lcls) + 2, "LCL")
+lines(ucls, col = 'red')
+text(1.5, mean(ucls) + 2, "UCL")
+
+plot(violations, type = 'l', ylim = c(0, 550), 
+     main = 'Varying Bias from 0.05:0.5 - Violations and Runs',
+     xlab = 'Bias',
+     ylab = 'value',
+     xaxt = 'n')
+axis(1, at = 1:10, labels = c(0.05, 0.1, 0.15, 0.2, 0.25, 0.30, 0.35, 0.4, 0.4, 0.5))
+text(2, mean(violations) + 30, "Violations")
+lines(runs, col = 'red')
+text(2, mean(runs), "Runs")
+
+save(spot_sims, file = "Figures/bias_sweep/spot_sims.RDA")
+save(perp_sims, file = "Figures/bias_sweep/perp_sims.RDA")
+save(prem_sims, file = "Figures/bias_sweep/prem_sims.RDA")
+save(qs, file = "Figures/bias_sweep/qs.RDA")
+save(stats, file = "Figures/bias_sweep/stats.RDA")
+save(centers, file = "Figures/bias_sweep/centers.RDA")
+save(lcls, file = "Figures/bias_sweep/lcls.RDA")
+save(ucls, file = "Figures/bias_sweep/ucls.RDA")
+save(violations, file = "Figures/bias_sweep/violations.RDA")
+save(runs, file = "Figures/bias_sweep/runs.RDA")
