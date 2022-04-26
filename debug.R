@@ -137,22 +137,22 @@ prem_sims[,n] <- premia
 
 }
 
-# p <- premia[250:tMax]
-# 
-# title <- paste0("Chartist:Noise = ", sigmaC, " : ", sigmaN)
-# 
-# plot(spot_price[250:tMax], type = "l", col = "red", main = title, xlab = "Timestep", ylab = "Price")
-# lines(perp_prices[250:tMax], col = "green")
-# legend("topleft", legend=c("Spot price", "Perp price"),
-#        col=c("red", "green"), lty=c(1,1), cex=1)
-# 
-# qcc(data = p,
-#     type = "xbar.one",
-#     title = "Shewhart Chart of Premiums", # Replacement title
-#     xlab = "Timestep",
-#     ylab = "Premium",
-#     digits = 2, # Limit the significant figures
-#     plot = TRUE)
+p <- premia[250:tMax]
+
+title <- paste0("Chartist:Noise = ", sigmaC, " : ", sigmaN)
+
+plot(spot_price[250:tMax], type = "l", col = "red", main = title, xlab = "Timestep", ylab = "Price")
+lines(perp_prices[250:tMax], col = "green")
+legend("topleft", legend=c("Spot price", "Perp price"),
+       col=c("red", "green"), lty=c(1,1), cex=1)
+
+qcc(data = p,
+    type = "xbar.one",
+    title = "Shewhart Chart of Premiums", # Replacement title
+    xlab = "Timestep",
+    ylab = "Premium",
+    digits = 2, # Limit the significant figures
+    plot = TRUE)
 
 print("Sims done")
 
